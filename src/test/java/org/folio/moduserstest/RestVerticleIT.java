@@ -14,24 +14,13 @@ import io.vertx.core.json.JsonObject;
 import io.vertx.ext.unit.Async;
 import io.vertx.ext.unit.TestContext;
 import io.vertx.ext.unit.junit.VertxUnitRunner;
-import java.io.UnsupportedEncodingException;
-import java.net.HttpURLConnection;
-import java.net.URLEncoder;
-import java.sql.SQLException;
-import java.text.DateFormat;
-import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
-
 import org.folio.rest.RestVerticle;
 import org.folio.rest.client.TenantClient;
 import org.folio.rest.persist.PostgresClient;
 import org.folio.rest.tools.parser.JsonPathParser;
 import org.folio.rest.tools.utils.NetworkUtils;
 import org.joda.time.DateTime;
+import org.joda.time.DateTimeZone;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Rule;
@@ -39,6 +28,19 @@ import org.junit.Test;
 import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
 
+import java.io.UnsupportedEncodingException;
+import java.net.HttpURLConnection;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.sql.SQLException;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 
 @RunWith(VertxUnitRunner.class)
@@ -1351,7 +1353,157 @@ public class RestVerticleIT {
   }
  }
 
- private void send(String url, TestContext context, HttpMethod method, String content,
+  @Test
+  public void unexpiredProxyRelationshipShouldBeValid(TestContext context) {
+    try {
+      //Create sponsor and proxy users
+      String proxyUserId = makeCreateUserRequest(context, "thomasmoore");
+      String sponsorUserId = makeCreateUserRequest(context, "jessicahill");
+
+      //Create proxy relationship without expiry
+      JsonObject proxyRelationship = new JsonObject();
+      proxyRelationship.put("userId", sponsorUserId);
+      proxyRelationship.put("proxyUserId", proxyUserId);
+      proxyRelationship.put("meta", new JsonObject()
+        .put("status", "Active")
+        .put("expirationDate", "2999-02-28T12:30:23+00:00"));
+
+      CompletableFuture<Response> createRelationshipCompleted = new CompletableFuture<>();
+
+      final String proxyRelationshipsUrl = "http://localhost:"+port+"/proxiesfor";
+
+      send(proxyRelationshipsUrl, context, HttpMethod.POST, proxyRelationship.encodePrettily(),
+        SUPPORTED_CONTENT_TYPE_JSON_DEF, 201,  new HTTPResponseHandler(createRelationshipCompleted));
+
+      Response createRelationshipResponse = createRelationshipCompleted.get(5, TimeUnit.SECONDS);
+
+      context.assertEquals(createRelationshipResponse.code, HttpURLConnection.HTTP_CREATED,
+        "Failed to create proxy relationship: " + createRelationshipResponse.body.encodePrettily());
+
+      //Test for expired using expiration date (should be included in results)
+      final String validateProxyQuery;
+
+      try {
+        DateTime expDate = new DateTime(DateTimeZone.UTC);
+        String unencodedValidateProxyQuery ="proxyUserId="+ proxyUserId
+          +" and userId="+sponsorUserId
+          +" and meta.status=Active"
+          +" and meta.expirationDate>"+expDate.toString().trim();
+
+        validateProxyQuery = URLEncoder.encode(unencodedValidateProxyQuery,
+          String.valueOf(StandardCharsets.UTF_8));
+
+      } catch (UnsupportedEncodingException e) {
+        context.fail("Failed to encode query for proxies");
+        return;
+      }
+
+      CompletableFuture<Response> queryRelationshipCompleted = new CompletableFuture<>();
+
+      send(proxyRelationshipsUrl + "?query=" + validateProxyQuery, context, HttpMethod.GET, null,
+        SUPPORTED_CONTENT_TYPE_JSON_DEF, 200,  new HTTPResponseHandler(queryRelationshipCompleted));
+
+      Response queryRelationshipsResponse = queryRelationshipCompleted.get(5, TimeUnit.SECONDS);
+
+      context.assertEquals(queryRelationshipsResponse.code, HttpURLConnection.HTTP_OK,
+        "Failed to query proxy relationship: " + queryRelationshipsResponse.body.encodePrettily());
+
+      final JsonArray proxyRelationships = queryRelationshipsResponse.body.getJsonArray("proxiesFor");
+
+      context.assertEquals(proxyRelationships.size(), 1,
+        "Wrong number of relationships found: " + proxyRelationships.encodePrettily());
+
+    } catch (Exception e) {
+      context.fail(e.getMessage());
+    }
+  }
+
+  @Test
+  public void proxyRelationshipWithoutExpiryShouldBeValid(TestContext context) {
+    try {
+      //Create sponsor and proxy users
+      String proxyUserId = makeCreateUserRequest(context, "stevejones");
+      String sponsorUserId = makeCreateUserRequest(context, "sallyjenkins");
+
+      //Create proxy relationship without expiry
+      JsonObject proxyRelationship = new JsonObject();
+      proxyRelationship.put("userId", sponsorUserId);
+      proxyRelationship.put("proxyUserId", proxyUserId);
+      proxyRelationship.put("meta", new JsonObject()
+        .put("status", "Active"));
+
+      CompletableFuture<Response> createRelationshipCompleted = new CompletableFuture<>();
+
+      final String proxyRelationshipsUrl = "http://localhost:"+port+"/proxiesfor";
+
+      send(proxyRelationshipsUrl, context, HttpMethod.POST, proxyRelationship.encodePrettily(),
+        SUPPORTED_CONTENT_TYPE_JSON_DEF, 201,  new HTTPResponseHandler(createRelationshipCompleted));
+
+      Response createRelationshipResponse = createRelationshipCompleted.get(5, TimeUnit.SECONDS);
+
+      context.assertEquals(createRelationshipResponse.code, HttpURLConnection.HTTP_CREATED,
+        "Failed to create proxy relationship: " + createRelationshipResponse.body.encodePrettily());
+
+      //Test for expired using expiration date (should be included in results)
+      final String validateProxyQuery;
+
+      try {
+        DateTime expDate = new DateTime(DateTimeZone.UTC);
+        String unencodedValidateProxyQuery ="proxyUserId="+ proxyUserId
+          +" and userId="+sponsorUserId
+          +" and meta.status=Active"
+          +" and meta.expirationDate>"+expDate.toString().trim();
+
+        validateProxyQuery = URLEncoder.encode(unencodedValidateProxyQuery,
+          String.valueOf(StandardCharsets.UTF_8));
+
+      } catch (UnsupportedEncodingException e) {
+        context.fail("Failed to encode query for proxies");
+        return;
+      }
+
+      CompletableFuture<Response> queryRelationshipCompleted = new CompletableFuture<>();
+
+      send(proxyRelationshipsUrl + "?query=" + validateProxyQuery, context, HttpMethod.GET, null,
+        SUPPORTED_CONTENT_TYPE_JSON_DEF, 200,  new HTTPResponseHandler(queryRelationshipCompleted));
+
+      Response queryRelationshipsResponse = queryRelationshipCompleted.get(5, TimeUnit.SECONDS);
+
+      context.assertEquals(queryRelationshipsResponse.code, HttpURLConnection.HTTP_OK,
+        "Failed to query proxy relationship: " + queryRelationshipsResponse.body.encodePrettily());
+
+      final JsonArray proxyRelationships = queryRelationshipsResponse.body.getJsonArray("proxiesFor");
+
+      context.assertEquals(proxyRelationships.size(), 1,
+        "Wrong number of relationships found: " + proxyRelationships.encodePrettily());
+
+    } catch (Exception e) {
+      context.fail(e.getMessage());
+    }
+  }
+
+  private String makeCreateUserRequest(TestContext context, String username)
+    throws InterruptedException,
+    ExecutionException,
+    TimeoutException {
+
+    final String userUrl = "http://localhost:"+port+"/users";
+
+    CompletableFuture<Response> createUserCompleted = new CompletableFuture<>();
+
+    send(userUrl, context, HttpMethod.POST, createUser(null, username, null).encode(),
+      SUPPORTED_CONTENT_TYPE_JSON_DEF, 201,  new HTTPResponseHandler(createUserCompleted));
+
+    Response createUserResponse = createUserCompleted.get(5, TimeUnit.SECONDS);
+
+    context.assertEquals(createUserResponse.code, HttpURLConnection.HTTP_CREATED,
+      "Failed to create user: " + createUserResponse.body.encodePrettily());
+
+    return createUserResponse.body.getString("id");
+  }
+
+
+  private void send(String url, TestContext context, HttpMethod method, String content,
      String contentType, int errorCode, Handler<HttpClientResponse> handler) {
    HttpClient client = vertx.createHttpClient();
    HttpClientRequest request;
