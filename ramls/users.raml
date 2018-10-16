@@ -22,9 +22,26 @@ traits:
 
 resourceTypes:
   collection: !include raml-util/rtypes/collection.raml
+  collection-stream: !include raml-util/rtypes/collection-stream.raml
   collection-item: !include raml-util/rtypes/item-collection.raml
   get-only: !include raml-util/rtypes/get-only.raml
   post-empty-body: !include raml-util/rtypes/post-empty-body.raml
+
+/userStream:
+  type:
+    collection-stream:
+      exampleCollection: !include examples/user_collection.sample
+      exampleItem: !include examples/user.sample
+      schemaCollection: userdataCollection
+      schemaItem: user
+  get:
+    is: [
+      searchable: {description: "", example: "active=true sortBy username"},
+      orderable: {fieldsList: "field A, field B"},
+      pageable,
+      facets
+    ]
+    description: Streams a list of users
 
 /users:
   type:

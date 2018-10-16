@@ -16,6 +16,15 @@
           ]
         },
         {
+          "methods": [ "GET" ],
+          "pathPattern": "/userStream",
+          "permissionsRequired": [ "userStream.collection.get" ],
+          "permissionsDesired": [
+            "userStream.read.basic",
+            "userStream.read.restricted"
+          ]
+        },
+        {
           "methods" : [ "GET" ],
           "pathPattern" : "/users/{id}",
           "permissionsRequired" : [ "users.item.get" ],
@@ -135,6 +144,11 @@
       "description" : "Get a collection of user records"
     },
     {
+      "permissionName" : "userStream.collection.get",
+      "displayName" : "userStream collection get",
+      "description" : "Stream user records"
+    },
+    {
       "permissionName" : "users.item.get",
       "displayName" : "users item get",
       "description" : "Read an individual record in the User module"
@@ -245,6 +259,7 @@
       "description" : "All permissions for the mod-users module",
       "subPermissions" : [
         "users.collection.get",
+        "userStream.collection.get",
         "users.item.get",
         "users.read.basic",
         "users.read.restricted",
