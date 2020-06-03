@@ -1,10 +1,10 @@
 
 buildMvn {
-  publishModDescriptor = true
-  publishAPI = true
+  publishModDescriptor = false
+  publishAPI = false
   mvnDeploy = true
-  runLintRamlCop = true
-  doKubeDeploy = true
+  runLintRamlCop = false
+  doKubeDeploy = false
   delegate {
    buildNode = true 
   }
