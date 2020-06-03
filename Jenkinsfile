@@ -5,9 +5,8 @@ buildMvn {
   mvnDeploy = true
   runLintRamlCop = false
   doKubeDeploy = false
-  delegate {
-   buildNode = true 
-  }
+  buildNode = true
+
 
   doDocker = {
     buildJavaDocker {
