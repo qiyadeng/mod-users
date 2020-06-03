@@ -5,7 +5,7 @@ buildMvn {
   mvnDeploy = true
   runLintRamlCop = false
   doKubeDeploy = false
-  buildNode = true
+
 
 
   doDocker = {
